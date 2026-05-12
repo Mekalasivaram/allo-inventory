@@ -3,10 +3,12 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
   const reservation = await prisma.reservation.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!reservation) {
@@ -14,27 +16,38 @@ export async function POST(
   }
 
   if (reservation.status !== "pending") {
-    return NextResponse.json({ error: "Already processed" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Already processed" },
+      { status: 400 }
+    );
   }
 
   if (new Date() > reservation.expiresAt) {
     // Release stock
     await prisma.stock.update({
       where: { id: reservation.stockId },
-      data: { reserved: { decrement: reservation.quantity } },
+      data: {
+        reserved: { decrement: reservation.quantity },
+      },
     });
+
     await prisma.reservation.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: "released" },
     });
-    return NextResponse.json({ error: "Reservation expired" }, { status: 410 });
+
+    return NextResponse.json(
+      { error: "Reservation expired" },
+      { status: 410 }
+    );
   }
 
   await prisma.$transaction([
     prisma.reservation.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: "confirmed" },
     }),
+
     prisma.stock.update({
       where: { id: reservation.stockId },
       data: {
