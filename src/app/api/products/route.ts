@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
-
-type ProductWithStocks = Prisma.ProductGetPayload<{
-  include: { stocks: { include: { warehouse: true } } };
-}>;
 
 export async function GET() {
   const products = await prisma.product.findMany({
@@ -17,11 +12,12 @@ export async function GET() {
     },
   });
 
-  const result = products.map((product: ProductWithStocks) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = (products as any[]).map((product) => ({
     id: product.id,
     name: product.name,
     description: product.description,
-    stocks: product.stocks.map((stock) => ({
+    stocks: product.stocks.map((stock: any) => ({
       warehouseId: stock.warehouseId,
       warehouseName: stock.warehouse.name,
       total: stock.total,
