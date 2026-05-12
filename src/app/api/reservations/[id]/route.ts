@@ -1,23 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(
+export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
-    const reservation = await prisma.reservation.findUnique({
-      where: { id },
-    });
+  const { id } = await context.params;
 
-    if (!reservation) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+  const reservation = await prisma.reservation.findUnique({
+    where: { id },
+  });
 
-    return NextResponse.json(reservation);
-  } catch (error) {
-    console.error("GET reservation error:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+  if (!reservation) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  if (reservation.status !== "pending") {
+    return NextResponse.json({ error: "Already processed" }, { status: 400 });
+  }
+
+  await prisma.$transaction([
+    prisma.reservation.update({
+      where: { id },
+      data: { status: "released" },
+    }),
+    prisma.stock.update({
+      where: { id: reservation.stockId },
+      data: { reserved: { decrement: reservation.quantity } },
+    }),
+  ]);
+
+  return NextResponse.json({ message: "Released" });
 }
